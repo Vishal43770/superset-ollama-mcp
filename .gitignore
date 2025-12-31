@@ -11,3 +11,10 @@ wheels/
 
 .env
 .superset_token
+venv/
+
+# System and IDE
+.DS_Store
+.vscode/
+.idea/
+*.log
