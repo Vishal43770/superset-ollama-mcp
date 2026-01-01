@@ -9,6 +9,7 @@ from typing import (
     Awaitable,
     Union,
 )
+import trino
 import os
 import httpx
 from contextlib import asynccontextmanager
@@ -29,30 +30,14 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
+    #ist 
+    #time_range = "1 hour"
 )
 
+
+trino_api= '192.168.68.118'
+
 logger = logging.getLogger(__name__)
-
-"""
-Superset MCP Integration
-
-This module provides a Model Control Protocol (MCP) server for Apache Superset,
-enabling AI assistants to interact with and control a Superset instance programmatically.
-
-It includes tools for:
-- Authentication and token management
-- Dashboard operations (list, get, create, update, delete)
-- Chart management (list, get, create, update, delete)
-- Database and dataset operations
-- SQL execution and query management
-- User information and recent activity tracking
-- Advanced data type handling
-- Tag management
-
-Each tool follows a consistent naming convention: superset_<category>_<action>
-"""
-
-# Load environment variables from .env file
 load_dotenv()
 
 # Constants
@@ -67,7 +52,6 @@ app = FastAPI(title="Superset MCP Server")
 
 @dataclass
 class SupersetContext:
-    """Typed context for the Superset MCP server"""
 
     client: httpx.AsyncClient
     base_url: str
@@ -836,21 +820,28 @@ async def superset_database_create(
 @requires_auth
 @handle_api_errors
 async def superset_database_get_tables(
-    ctx: Context, database_id: int
+    ctx: Context, database_id: int, schema_name: str = None
 ) -> Dict[str, Any]:
     """
     Get a list of tables for a given database
-
+    
     Makes a request to the /api/v1/database/{id}/tables/ endpoint to retrieve
     all tables available in the database.
-
+    
     Args:
         database_id: ID of the database
-
+        schema_name: Optional schema name to filter tables
+        
     Returns:
         A dictionary with list of tables including schema and table name information
     """
-    return await make_api_request(ctx, "get", f"/api/v1/database/{database_id}/tables/")
+    params = {}
+    if schema_name:
+        params["schema_name"] = schema_name
+        
+    return await make_api_request(
+        ctx, "get", f"/api/v1/database/{database_id}/tables/", params=params
+    )
 
 
 @mcp.tool()
@@ -1837,6 +1828,38 @@ async def superset_advanced_data_type_list(ctx: Context) -> Dict[str, Any]:
         A dictionary with available advanced data types and their configurations
     """
     return await make_api_request(ctx, "get", "/api/v1/advanced_data_type/types")
+
+
+
+# ===== AI Agent Tools =====
+
+
+@mcp.tool()
+@requires_auth
+@handle_api_errors
+async def superset_ai_analyze(
+    ctx: Context, query: str, model: str = "qwen3-coder:480b-cloud"
+) -> Dict[str, Any]:
+    """
+    Analyze data and create visualizations using an AI agent (Ollama)
+    
+    This tool uses a local Ollama model to understand natural language queries,
+    introspect the database, execute SQL if needed, and create Superset charts.
+    
+    Args:
+        query: The natural language request (e.g., "Show me sales by region")
+        model: The Ollama model to use (default: "qwen3-coder:480b-cloud")
+        
+    Returns:
+        A dictionary with the agent's response, typically containing the URL 
+        of the created chart or dashboard.
+    """
+    from agent import SupersetAgent
+    
+    agent = SupersetAgent(ctx, model=model)
+    response = await agent.chat(query)
+    
+    return {"result": response}
 
 
 if __name__ == "__main__":

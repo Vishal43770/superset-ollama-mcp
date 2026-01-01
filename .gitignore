@@ -18,3 +18,4 @@ venv/
 .vscode/
 .idea/
 *.log
+/home/vishal/office/superset-mcp/superset_config.py
